@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#141414" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="라운드킷" />
+  <meta name="description" content="복싱 라운드, 타바타, 스톱워치 타이머" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>라운드킷 | 운동 타이머</title>
+</head>
+<body>
+ <div class="app">
+  <header class="topbar"><div><span class="eyebrow">TRAINING TIMER</span><h1>라운드킷<span class="dot">.</span></h1></div><button id="prefsButton" class="icon-button" aria-label="공통 설정">⚙</button></header>
+  <nav class="mode-nav" aria-label="타이머 종류"><button class="mode-tab active" data-mode="boxing">라운드</button><button class="mode-tab" data-mode="tabata">타바타</button><button class="mode-tab" data-mode="stopwatch">스톱워치</button></nav>
+  <main>
+   <section id="timerPanel" class="timer-panel phase-idle" aria-label="타이머">
+    <div class="timer-top"><span id="phaseLabel" class="phase-label">준비 완료</span><span id="progressLabel" class="progress-label">ROUND 1 / 4</span></div>
+    <div id="timeDisplay" class="time-display" role="timer" aria-live="off">03:00</div>
+    <div id="secondaryLabel" class="secondary-label">시작을 누르면 준비 카운트다운이 시작됩니다</div>
+    <div class="track"><div id="progressFill" class="fill"></div></div>
+    <div class="controls"><button id="resetBtn" class="small-action" title="초기화">↺<span>초기화</span></button><button id="primaryBtn" class="primary-action"><span id="primarySymbol">▶</span><span id="primaryText">시작</span></button><button id="skipBtn" class="small-action" title="다음 단계">⏭<span>다음 단계</span></button></div>
+   </section>
+   <section class="settings-section"><div class="section-head"><h2 id="settingsTitle">라운드 설정</h2><span class="muted">숫자를 눌러 초 단위 입력</span></div><div id="settingsFields" class="settings-fields"></div></section>
+   <section class="extras"><div class="toggle-row"><div><strong>화면 꺼짐 방지</strong><small id="wakeSub">지원 환경에서 운동 중 화면 유지</small></div><label class="switch"><input id="wakeToggle" type="checkbox" checked /><span></span></label></div><div class="toggle-row"><div><strong>알림음</strong><small>운동·휴식 전환 및 종료 3초 전</small></div><label class="switch"><input id="soundToggle" type="checkbox" checked /><span></span></label></div><div class="toggle-row"><div><strong>진동</strong><small>지원 기기에서 단계 전환 시 짧게 진동</small></div><label class="switch"><input id="vibrateToggle" type="checkbox" checked /><span></span></label></div></section>
+   <p id="hint" class="footnote">화면 유지 및 잠금 상태 알림음은 기기와 브라우저에 따라 제한될 수 있습니다.</p>
+  </main>
+  <footer>ROUNDKIT · VERSION 1.0 <span id="offlineLabel">· 오프라인 준비 중</span></footer>
+ </div>
+ <dialog id="prefsDialog"><form method="dialog" class="dialog-content"><div class="dialog-head"><h2>공통 설정</h2><button aria-label="닫기" class="close-btn">✕</button></div><p>상태별 색상을 변경할 수 있습니다. 변경 사항은 이 기기에 저장됩니다.</p><div id="colorsList"></div><button type="button" id="resetColors" class="secondary-button">기본 색상으로 되돌리기</button><button class="primary-action dialog-done">완료</button></form></dialog>
+ <script src="./app.js" defer></script>
+</body>
+</html>
