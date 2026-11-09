@@ -25,8 +25,48 @@ function buildPhases(mode){const s=state[mode],p=[];const push=(type,duration,ro
  if(mode==='tabata'){for(let c=1;c<=s.cycles;c++){for(let r=1;r<=s.rounds;r++){push('work',s.work,r,c);if(r<s.rounds)push('rest',s.rest,r,c)}if(c<s.cycles)push('cycleRest',s.cycleRest,s.rounds,c)}push('cooldown',s.cooldown,s.rounds,s.cycles)}return p}
 function phaseName(type){return {prep:'준비',work:'운동',rest:'휴식',cycleRest:'사이클 휴식',cooldown:'쿨다운',paused:'일시정지',done:'완료',idle:'준비 완료'}[type]||'준비'}
 function activePhase(){return engine.phases[engine.index]}
-function unlockAudio(){if(!state.sound)return;try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;if(!audioCtx)audioCtx=new C();if(audioCtx.state==='suspended')audioCtx.resume()}catch{}}
-function beep(kind='change'){if(!state.sound)return;try{unlockAudio();if(!audioCtx)return;const now=audioCtx.currentTime,notes=kind==='finish'?[880,1100,1320]:kind==='count'?[670]:kind==='rest'?[520,440]:[900,1050];notes.forEach((f,i)=>{let o=audioCtx.createOscillator(),g=audioCtx.createGain(),at=now+i*.14;o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(.001,at);g.gain.exponentialRampToValueAtTime(.16,at+.015);g.gain.exponentialRampToValueAtTime(.001,at+.115);o.connect(g).connect(audioCtx.destination);o.start(at);o.stop(at+.12)})}catch{}}
+// Audio files play through HTMLAudioElement; a user press unlocks media on iOS.
+const soundPlayers={
+  bell:new Audio('./boxing-bell.wav'),
+  count:new Audio('./countdown.wav'),
+  rest:new Audio('./rest-tone.wav')
+};
+Object.values(soundPlayers).forEach(player=>{player.preload='auto';player.playsInline=true;player.load()});
+let audioUnlocked=false;
+function setAudioMessage(message,warning=false){
+ const el=$('audioStatus');if(el){el.textContent=message;el.style.color=warning?'#ffb86b':'#a6d979'}
+}
+function unlockAudio(){
+ if(!state.sound)return;
+ try{
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(C){if(!audioCtx)audioCtx=new C();if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});}
+ }catch{}
+}
+function fallbackBeep(kind){
+ try{
+  unlockAudio();if(!audioCtx||audioCtx.state!=='running')return;
+  const now=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=kind==='count'?'sine':'triangle';o.frequency.value=kind==='rest'?520:kind==='count'?880:930;
+  g.gain.setValueAtTime(.001,now);g.gain.exponentialRampToValueAtTime(.4,now+.015);
+  g.gain.exponentialRampToValueAtTime(.001,now+(kind==='count'?.16:.55));
+  o.connect(g).connect(audioCtx.destination);o.start(now);o.stop(now+(kind==='count'?.17:.57));
+ }catch{}
+}
+function beep(kind='change',force=false){
+ if(!state.sound&&!force)return;
+ unlockAudio();
+ const sound=kind==='count'?'count':(engine.mode==='boxing'||kind==='finish'?'bell':kind==='rest'?'rest':'count');
+ const player=soundPlayers[sound];
+ try{
+  player.pause();player.currentTime=0;
+  const attempt=player.play();
+  if(attempt&&typeof attempt.then==='function')attempt.then(()=>{audioUnlocked=true;setAudioMessage('알림음 재생 준비 완료')}).catch(err=>{
+    fallbackBeep(kind);
+    setAudioMessage(err?.name==='NotAllowedError'?'소리 재생이 차단됨 · 테스트 버튼을 눌러 허용해 주세요':'소리 재생 실패 · 볼륨과 무음 모드 확인',true);
+  });
+ }catch(err){fallbackBeep(kind);setAudioMessage('소리 재생에 실패했습니다. 알림음 테스트를 눌러주세요.',true)}
+}
 function vibrate(){if(state.vibrate&&'vibrate' in navigator)try{navigator.vibrate(140)}catch{}}
 async function requestWake(){if(!state.wake||engine.status!=='running'||!('wakeLock' in navigator)||document.visibilityState!=='visible')return;try{if(!wakeLock)wakeLock=await navigator.wakeLock.request('screen');$('wakeSub').textContent='화면 유지 활성화'}catch{$('wakeSub').textContent='현재 환경에서 화면 유지가 제한됩니다'}}
 async function releaseWake(){if(wakeLock){try{await wakeLock.release()}catch{}wakeLock=null}$('wakeSub').textContent='지원 환경에서 운동 중 화면 유지'}
@@ -56,7 +96,7 @@ function render(){const mode=state.mode,phase=displayStatus(),running=engine.sta
 function changeMode(mode){state.mode=mode;persist();reset();document.querySelectorAll('.mode-tab').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));$('settingsTitle').textContent=modes[mode]+' 설정';buildSettings();render()}
 function buildSettings(){const wrapper=$('settingsFields');wrapper.replaceChildren();for(const [key,title,desc,min,max,step,color] of schema[state.mode]){const row=document.createElement('div');row.className='setting-row';const label=document.createElement('div');label.className='setting-caption';const dot=document.createElement('span');dot.className='color-bullet';dot.style.background=state.colors[color];let strong=document.createElement('strong');strong.append(dot,document.createTextNode(title));let small=document.createElement('small');small.textContent=desc;label.append(strong,small);const controls=document.createElement('div');controls.className='number-set';const minus=document.createElement('button'),plus=document.createElement('button'),input=document.createElement('input'),unit=document.createElement('span');minus.className=plus.className='stepper';minus.textContent='−';plus.textContent='+';minus.setAttribute('aria-label',title+' 감소');plus.setAttribute('aria-label',title+' 증가');input.type='number';input.inputMode='numeric';input.className='num-input';input.min=min;input.max=max;input.step=1;input.value=state[state.mode][key];input.setAttribute('aria-label',title);unit.className='unit';unit.textContent=key==='rounds'||key==='cycles'?'회':'초';function set(v){const n=Math.round(Number(v));if(!Number.isFinite(n))return;state[state.mode][key]=Math.min(max,Math.max(min,n));input.value=state[state.mode][key];persist();reset()}minus.onclick=()=>set(state[state.mode][key]-step);plus.onclick=()=>set(state[state.mode][key]+step);input.addEventListener('change',()=>set(input.value||min));controls.append(minus,input,plus,unit);row.append(label,controls);wrapper.append(row)}}
 function buildColors(){const wrap=$('colorsList');wrap.replaceChildren();for(const [key,label] of Object.entries({prep:'준비',work:'운동',rest:'휴식',cycleRest:'사이클 휴식',cooldown:'쿨다운',paused:'일시정지',done:'완료',idle:'시작 전'})){const row=document.createElement('label');row.className='color-row';const span=document.createElement('span');span.textContent=label;const input=document.createElement('input');input.type='color';input.value=state.colors[key];input.oninput=()=>{state.colors[key]=input.value;persist();render();buildSettings()};row.append(span,input);wrap.append(row)}}
-$('primaryBtn').onclick=()=>engine.status==='running'?pause():start();$('resetBtn').onclick=reset;$('skipBtn').onclick=skip;document.querySelectorAll('.mode-tab').forEach(b=>b.onclick=()=>changeMode(b.dataset.mode));$('wakeToggle').checked=state.wake;$('soundToggle').checked=state.sound;$('vibrateToggle').checked=state.vibrate;$('wakeToggle').onchange=e=>{state.wake=e.target.checked;persist();state.wake?requestWake():releaseWake()};$('soundToggle').onchange=e=>{state.sound=e.target.checked;persist();if(state.sound)unlockAudio()};$('vibrateToggle').onchange=e=>{state.vibrate=e.target.checked;persist()};$('prefsButton').onclick=()=>{buildColors();$('prefsDialog').showModal()};$('resetColors').onclick=()=>{state.colors=clone(DEFAULTS.colors);persist();buildColors();buildSettings();render()};
+$('soundTestBtn').onclick=()=>{state.sound=true;$('soundToggle').checked=true;persist();unlockAudio();beep('change',true)};$('primaryBtn').onclick=()=>engine.status==='running'?pause():start();$('resetBtn').onclick=reset;$('skipBtn').onclick=skip;document.querySelectorAll('.mode-tab').forEach(b=>b.onclick=()=>changeMode(b.dataset.mode));$('wakeToggle').checked=state.wake;$('soundToggle').checked=state.sound;$('vibrateToggle').checked=state.vibrate;$('wakeToggle').onchange=e=>{state.wake=e.target.checked;persist();state.wake?requestWake():releaseWake()};$('soundToggle').onchange=e=>{state.sound=e.target.checked;persist();if(state.sound)unlockAudio()};$('vibrateToggle').onchange=e=>{state.vibrate=e.target.checked;persist()};$('prefsButton').onclick=()=>{buildColors();$('prefsDialog').showModal()};$('resetColors').onclick=()=>{state.colors=clone(DEFAULTS.colors);persist();buildColors();buildSettings();render()};
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(engine.status==='running')requestWake();tick()}else{releaseWake()}});
 window.addEventListener('pagehide',releaseWake);
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').then(()=>{$('offlineLabel').textContent='· 오프라인 사용 지원'}).catch(()=>{$('offlineLabel').textContent='· HTTPS로 배포 시 오프라인 지원'}))}
